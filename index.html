@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WhatsApp Store</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    h1 { color: #25D366; }
+    .product { border: 1px solid #ddd; padding: 10px; margin: 10px; width: 220px; display: inline-block; vertical-align: top; }
+    img { width: 100%; height: 150px; object-fit: cover; }
+    button { background: #25D366; color: #fff; border: none; padding: 8px 12px; cursor: pointer; }
+    button:hover { background: #1ebe5d; }
+    .cart { margin-top: 30px; border-top: 2px solid #ddd; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Store</h1>
+
+  <h2>Import AliExpress Product</h2>
+  <input id="url" placeholder="Paste AliExpress URL" style="width:400px">
+  <button onclick="importProduct()">Import</button>
+
+  <div id="store"></div>
+
+  <div class="cart">
+    <h2>Cart</h2>
+    <div id="cart"></div>
+    <p id="total">Total: £0.00</p>
+    <input id="name" placeholder="Your name"><br>
+    <input id="phone" placeholder="Your phone"><br>
+    <textarea id="address" placeholder="Delivery address"></textarea><br>
+    <button onclick="checkout()">Checkout via WhatsApp</button>
+  </div>
+
+  <script>
+    const WA_TARGET = "447930342425"; // your WhatsApp number
+    let cart = [];
+
+    async function importProduct() {
+      const url = document.getElementById("url").value;
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const p = await res.json();
+      addProduct(p);
+    }
+
+    function addProduct(p) {
+      const div = document.createElement("div");
+      div.className = "product";
+      div.innerHTML = `
+        <img src="${p.image}">
+        <h3>${p.name}</h3>
+        <p>${p.description}</p>
+        <p><strong>£${p.price.toFixed(2)}</strong></p>
+        <button onclick="addToCart('${p.name}', ${p.price})">Add to Cart</button>
+      `;
+      document.getElementById("store").appendChild(div);
+    }
+
+    function addToCart(name, price) {
+      const item = cart.find(c => c.name === name);
+      if (item) item.qty++;
+      else cart.push({ name, price, qty: 1 });
+      renderCart();
+    }
+
+    function renderCart() {
+      const div = document.getElementById("cart");
+      div.innerHTML = "";
+      let total = 0;
+      cart.forEach(it => {
+        total += it.qty * it.price;
+        div.innerHTML += `<div>${it.name} x${it.qty} – £${(it.qty*it.price).toFixed(2)}</div>`;
+      });
+      document.getElementById("total").innerText = "Total: £" + total.toFixed(2);
+    }
+
+    function checkout() {
+      const name = document.getElementById("name").value;
+      const phone = document.getElementById("phone").value;
+      const address = document.getElementById("address").value;
+      let total = 0;
+      const lines = [`New order`, `Name: ${name}`, `Phone: ${phone}`, `Address: ${address}`, "", "Items:"];
+      cart.forEach(it => {
+        total += it.qty * it.price;
+        lines.push(`• ${it.name} x${it.qty} – £${(it.qty*it.price).toFixed(2)}`);
+      });
+      lines.push("", `Total: £${total.toFixed(2)}`);
+      const txt = encodeURIComponent(lines.join("\n"));
+      window.open(`https://wa.me/${WA_TARGET}?text=${txt}`, "_blank");
+    }
+  </script>
+</body>
+</html>
