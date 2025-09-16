@@ -6,57 +6,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const apiKey = process.env.SCRAPER_API_KEY; // use env variable
+    const apiUrl = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(url)}`;
+
+    const resp = await fetch(apiUrl);
     const html = await resp.text();
 
-    // Grab runParams JSON blob
-    const runParamsMatch = html.match(/window\.runParams\s*=\s*({.*});/s);
-    let data = {};
-    if (runParamsMatch) {
-      try {
-        data = JSON.parse(runParamsMatch[1]);
-      } catch (e) {
-        console.error("Failed to parse runParams", e);
-      }
-    }
+    // Extract product info
+    const title = html.match(/"subject":"([^"]+)"/i)?.[1] || "Untitled";
+    const desc = html.match(/"seoDescription":"([^"]+)"/i)?.[1] || "";
+    const priceStr =
+      html.match(/"salePrice":"([^"]+)"/i)?.[1] ||
+      html.match(/"price":"([^"]+)"/i)?.[1] ||
+      "0";
 
-    // Title
-    const title =
-      data?.title ||
-      data?.product?.subject ||
-      html.match(/"subject":"([^"]+)"/i)?.[1] ||
-      "Untitled";
-
-    // Description
-    const desc =
-      data?.seoDescription ||
-      html.match(/"seoDescription":"([^"]+)"/i)?.[1] ||
-      "";
-
-    // Price
-    let cost = 0;
-    if (data?.priceModule?.formatedPrice) {
-      cost = parseFloat(data.priceModule.formatedPrice.replace(/[^\d.]/g, ""));
-    } else if (data?.priceModule?.minAmount) {
-      cost = data.priceModule.minAmount;
-    } else {
-      const priceStr =
-        html.match(/"salePrice":"([^"]+)"/i)?.[1] ||
-        html.match(/"price":"([^"]+)"/i)?.[1] ||
-        "0";
-      cost = parseFloat(priceStr.replace(/[^\d.]/g, "")) || 0;
-    }
+    const cost = parseFloat(priceStr.replace(/[^\d.]/g, "")) || 0;
     const price = +(cost * 1.2).toFixed(2);
 
-    // Image
-    let img =
-      data?.imageModule?.imagePathList?.[0] ||
-      data?.imageModule?.imagePath?.[0] ||
-      html.match(/"imagePath":"([^"]+)"/i)?.[1] ||
+    const img =
+      html.match(/"imagePath":"([^"]+)"/i)?.[1]
+        ?.replace(/\\u002F/g, "/")
+        .replace(/\\\//g, "/") ||
       "https://via.placeholder.com/200x150?text=No+Image";
-
-    // Fix AliExpress escaping
-    img = img.replace(/\\u002F/g, "/").replace(/\\\//g, "/");
 
     res.status(200).json({ name: title, description: desc, price, image: img });
   } catch (e) {
